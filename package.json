@@ -3,5 +3,5 @@
   "version":"1.0.0",
   "private":true,
   "scripts":{"start":"node server.js","dev":"node server.js"},
-  "dependencies":{"express":"^5.1.0","razorpay":"^2.9.6","dotenv":"^17.2.1"}
+ "dependencies":{"express":"^5.1.0","razorpay":"^2.9.6","dotenv":"^17.2.1","@supabase/supabase-js":"^2.57.0"}
 }
