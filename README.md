@@ -1,4 +1,4 @@
-# Companio Marketplace
+# MeraPartner Marketplace
 
 A starter marketplace for adult, non-sexual companionship and social experiences.
 
