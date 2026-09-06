@@ -34,7 +34,7 @@ app.post("/api/create-registration-order", async (req, res) => {
       amount: 30000,
       currency: "INR",
       receipt: "reg_" + Date.now(),
-      notes: { purpose: "Companio registration fee" },
+      notes: { purpose: "MeraPartner registration fee" },
     });
 
     res.json(order);
