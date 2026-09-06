@@ -104,7 +104,7 @@ async function payRegistration() {
       key: cfg.keyId,
       amount: order.amount,
       currency: order.currency,
-      name: "Companio",
+      name: "MeraPartner",
       description: "One-time registration fee",
       order_id: order.id,
       prefill: { name, email, contact: phone },
@@ -148,7 +148,7 @@ async function pay(name, amount) {
     const order = await r.json();
     if (!r.ok) throw new Error(order.error || "Could not create order");
     const cfg = await fetch("/api/config").then((x) => x.json());
-    const rz = new Razorpay({ key: cfg.keyId, amount: order.amount, currency: "INR", name: "Companio", description: `Companion booking — ${name}`, order_id: order.id, handler: function () { alert("Payment received. Booking confirmation will be added after final payment verification and database setup."); hide(); }, theme: { color: "#b65243" } });
+    const rz = new Razorpay({ key: cfg.keyId, amount: order.amount, currency: "INR", name: "MeraPartner", description: `Companion booking — ${name}`, order_id: order.id, handler: function () { alert("Payment received. Booking confirmation will be added after final payment verification and database setup."); hide(); }, theme: { color: "#b65243" } });
     rz.open();
   } catch (e) {
     alert(e.message + "\n\nAdd your Razorpay TEST keys in Vercel to enable payments.");
