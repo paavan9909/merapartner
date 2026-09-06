@@ -2,7 +2,13 @@ const express = require("express");
 const Razorpay = require("razorpay");
 const crypto = require("crypto");
 const path = require("path");
+const { createClient } = require("@supabase/supabase-js");
 require("dotenv").config();
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SECRET_KEY
+);
 
 const app = express();
 app.use(express.json());
@@ -67,10 +73,65 @@ app.post("/api/verify-registration", (req, res) => {
     );
 
     if (!valid) {
-      return res.status(400).json({ error: "Payment verification failed." });
-    }
+  return res.status(400).json({ error: "Payment verification failed." });
+}
 
-    res.json({ verified: true, paymentId: razorpay_payment_id });
+const { name, email, contact } = req.body;
+const phone = contact?.phone || "";
+
+if (!name || !email || !phone) {
+  return res.status(400).json({
+    error: "Name, email and phone are required."
+  });
+}
+
+// Save / update the user in Supabase
+const { data: user, error: userError } = await supabase
+  .from("users")
+  .upsert(
+    {
+      full_name: name.trim(),
+      email: email.trim().toLowerCase(),
+      phone: phone.trim(),
+      is_18_plus: true,
+      registration_paid: true
+    },
+    {
+      onConflict: "email"
+    }
+  )
+  .select()
+  .single();
+
+if (userError) {
+  console.error("Supabase user error:", userError);
+  return res.status(500).json({
+    error: "Payment verified, but user registration could not be saved."
+  });
+}
+
+// Save the registration payment
+const { error: paymentError } = await supabase
+  .from("registration_payments")
+  .insert({
+    user_id: user.id,
+    razorpay_order_id,
+    razorpay_payment_id,
+    amount: 300,
+    status: "paid"
+  });
+
+if (paymentError) {
+  console.error("Supabase payment error:", paymentError);
+  return res.status(500).json({
+    error: "Payment verified, but payment record could not be saved."
+  });
+}
+
+res.json({
+  verified: true,
+  paymentId: razorpay_payment_id
+});
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Could not verify payment." });
