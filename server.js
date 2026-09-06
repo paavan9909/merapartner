@@ -538,7 +538,296 @@ app.post("/api/create-order", async (req, res) => {
     });
   }
 });
+// ------------------------------------
+// Admin authentication
+// ------------------------------------
 
+function createAdminToken() {
+  const timestamp = Date.now().toString();
+
+  const signature = crypto
+    .createHmac(
+      "sha256",
+      process.env.ADMIN_PASSWORD
+    )
+    .update(timestamp)
+    .digest("hex");
+
+  return `${timestamp}.${signature}`;
+}
+
+function isAdminAuthenticated(req) {
+  const cookieHeader = req.headers.cookie || "";
+
+  const match = cookieHeader.match(
+    /merapartner_admin=([^;]+)/
+  );
+
+  if (!match) {
+    return false;
+  }
+
+  const token = decodeURIComponent(match[1]);
+  const parts = token.split(".");
+
+  if (parts.length !== 2) {
+    return false;
+  }
+
+  const [timestamp, signature] = parts;
+
+  const tokenAge =
+    Date.now() - Number(timestamp);
+
+  // Admin session expires after 1 hour
+  if (
+    !Number.isFinite(tokenAge) ||
+    tokenAge < 0 ||
+    tokenAge > 60 * 60 * 1000
+  ) {
+    return false;
+  }
+
+  const expectedSignature = crypto
+    .createHmac(
+      "sha256",
+      process.env.ADMIN_PASSWORD
+    )
+    .update(timestamp)
+    .digest("hex");
+
+  if (
+    signature.length !==
+    expectedSignature.length
+  ) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(
+    Buffer.from(signature),
+    Buffer.from(expectedSignature)
+  );
+}
+
+// ------------------------------------
+// Admin login
+// ------------------------------------
+
+app.post("/api/admin/login", (req, res) => {
+  try {
+    const { password } = req.body;
+
+    if (!process.env.ADMIN_PASSWORD) {
+      return res.status(503).json({
+        error:
+          "Admin password is not configured.",
+      });
+    }
+
+    if (
+      !password ||
+      password !== process.env.ADMIN_PASSWORD
+    ) {
+      return res.status(401).json({
+        error: "Incorrect admin password.",
+      });
+    }
+
+    const token = createAdminToken();
+
+    res.setHeader(
+      "Set-Cookie",
+      `merapartner_admin=${encodeURIComponent(
+        token
+      )}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=3600`
+    );
+
+    res.json({
+      authenticated: true,
+    });
+  } catch (error) {
+    console.error(
+      "Admin login error:",
+      error
+    );
+
+    res.status(500).json({
+      error: "Admin login failed.",
+    });
+  }
+});
+
+// ------------------------------------
+// Admin logout
+// ------------------------------------
+
+app.post("/api/admin/logout", (req, res) => {
+  res.setHeader(
+    "Set-Cookie",
+    "merapartner_admin=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0"
+  );
+
+  res.json({
+    loggedOut: true,
+  });
+});
+
+// ------------------------------------
+// Admin dashboard data
+// ------------------------------------
+
+app.get(
+  "/api/admin/dashboard",
+  async (req, res) => {
+    try {
+      if (!isAdminAuthenticated(req)) {
+        return res.status(401).json({
+          error: "Admin authentication required.",
+        });
+      }
+
+      if (!supabase) {
+        return res.status(503).json({
+          error:
+            "Supabase is not configured.",
+        });
+      }
+
+      // Customers
+      const { data: users, error: usersError } =
+        await supabase
+          .from("users")
+          .select("id");
+
+      if (usersError) {
+        throw usersError;
+      }
+
+      // Partners
+      const {
+        data: companions,
+        error: companionsError,
+      } = await supabase
+        .from("companions")
+        .select("id");
+
+      if (companionsError) {
+        throw companionsError;
+      }
+
+      // Bookings
+      const {
+        data: bookings,
+        error: bookingsError,
+      } = await supabase
+        .from("bookings")
+        .select(
+          `
+          id,
+          customer_email,
+          companion_name,
+          booking_date,
+          booking_time,
+          amount,
+          status
+          `
+        )
+        .order(
+          "created_at",
+          { ascending: false }
+        )
+        .limit(20);
+
+      if (bookingsError) {
+        throw bookingsError;
+      }
+
+      // Registration revenue
+      const {
+        data: registrationPayments,
+        error: registrationError,
+      } = await supabase
+        .from("registration_payments")
+        .select("amount, status")
+        .eq("status", "paid");
+
+      if (registrationError) {
+        throw registrationError;
+      }
+
+      const registrationRevenue =
+        (registrationPayments || []).reduce(
+          (total, payment) =>
+            total +
+            Number(payment.amount || 0),
+          0
+        );
+
+      // Booking revenue
+      const bookingRevenue =
+        (bookings || [])
+          .filter(
+            (booking) =>
+              booking.status === "confirmed"
+          )
+          .reduce(
+            (total, booking) =>
+              total +
+              Number(booking.amount || 0),
+            0
+          );
+
+      const recentBookings =
+        (bookings || []).map(
+          (booking) => ({
+            customer:
+              booking.customer_email ||
+              "-",
+            partner:
+              booking.companion_name ||
+              "-",
+            date:
+              booking.booking_date ||
+              "-",
+            time:
+              booking.booking_time ||
+              "-",
+            amount:
+              Number(booking.amount || 0),
+            status:
+              booking.status || "-",
+          })
+        );
+
+      res.json({
+        customers:
+          (users || []).length,
+
+        partners:
+          (companions || []).length,
+
+        bookings:
+          (bookings || []).length,
+
+        revenue:
+          registrationRevenue +
+          bookingRevenue,
+
+        recentBookings,
+      });
+    } catch (error) {
+      console.error(
+        "Admin dashboard error:",
+        error
+      );
+
+      res.status(500).json({
+        error:
+          "Could not load admin dashboard.",
+      });
+    }
+  }
+);
 // ------------------------------------
 // Website
 // ------------------------------------
