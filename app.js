@@ -1,0 +1,16 @@
+const people=[
+{name:"Aarav",city:"Vadodara",price:1200,type:"men",tags:["Coffee","Events","Travel"],cls:""},
+{name:"Riya",city:"Ahmedabad",price:1500,type:"women",tags:["Dinner","Movies","Art"],cls:"p2"},
+{name:"Kabir",city:"Mumbai",price:1800,type:"men",tags:["Fitness","Food","Events"],cls:"p3"},
+{name:"Meera",city:"Pune",price:1400,type:"women",tags:["Music","Coffee","Travel"],cls:"p4"}];
+const cards=document.querySelector("#cards");
+function render(f="all"){cards.innerHTML=people.filter(p=>f==="all"||p.type===f).map(p=>`<article class="card"><div class="photo ${p.cls}"><span>✓ Verified adult</span></div><div class="body"><div class="line"><h3>${p.name}</h3><span class="price">₹${p.price}/hr</span></div><div class="meta">${p.city} · Available this week</div><div>${p.tags.map(t=>`<span class="tag">${t}</span>`).join("")}</div><button class="book" onclick="booking('${p.name}',${p.price})">Request & pay</button></div></article>`).join("")}
+document.querySelectorAll("#filters button").forEach(b=>b.onclick=()=>{document.querySelectorAll("#filters button").forEach(x=>x.classList.remove("selected"));b.classList.add("selected");render(b.dataset.f)});
+function show(kind){const m=document.querySelector("#modal");let html="";
+if(kind==="join")html=`<h2>Become a companion</h2><p>Adults 18+ only. Applications are reviewed before profiles are published.</p><input placeholder="Full name"><input placeholder="Email"><input placeholder="City"><button class="pay" onclick="alert('Demo application submitted.')">Submit application</button>`;
+else if(kind==="howModal")html=`<h2>How it works</h2><p>Browse adult companions, choose an activity and time, then request a booking. Payment is handled securely through the payment gateway. Keep first meetings in public places.</p>`;
+document.querySelector("#modalBody").innerHTML=html;m.classList.add("show")}
+function hide(){document.querySelector("#modal").classList.remove("show")}
+async function booking(name,amount){show();document.querySelector("#modalBody").innerHTML=`<h2>Book ${name}</h2><p>Rate: ₹${amount}/hr</p><select id="activity"><option>Coffee & conversation</option><option>Dinner</option><option>Movie / event</option><option>City activity</option></select><input id="date" type="date"><input id="time" type="time"><input id="place" placeholder="Public meeting place"><button class="pay" onclick="pay('${name}',${amount})">Continue to secure payment</button>`}
+async function pay(name,amount){try{const r=await fetch("/api/create-order",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({amount})});const order=await r.json();if(!r.ok)throw new Error(order.error||"Could not create order");const cfg=await fetch("/api/config").then(x=>x.json());const rz=new Razorpay({key:cfg.keyId,amount:order.amount,currency:"INR",name:"Companio",description:`Companion booking — ${name}`,order_id:order.id,handler:function(resp){alert("Payment received: "+resp.razorpay_payment_id+"\nAdd server-side signature verification before treating this booking as confirmed.");hide()},theme:{color:"#b65243"}});rz.open()}catch(e){alert(e.message+"\n\nFor now, add your Razorpay TEST keys to .env.")}}
+document.querySelector("#modal").onclick=e=>{if(e.target.id==="modal")hide()};render();
